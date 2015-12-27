@@ -93,8 +93,89 @@ int main(int argc,char *argv[])
 				printf("VN: %u, CD: %u, DST IP: %s, DST PORT: %d,USERID: %s\n",vn,cd,domain,dstport,user_id);
 				fflush(stdout);
 				
+				struct hostent *he;
 				
-			}	
+				
+				he=gethostbyname(domain);
+				if(he!=NULL){
+					struct sockaddr_in fsin;
+					
+					bzero(&fsin,sizeof(fsin));
+					fsin.sin_family= AF_INET;
+					fsin.sin_addr = *((struct in_addr *)he->h_addr);
+					fsin.sin_port = htons(dstport);
+					
+					
+					if(cd==1){
+						int csock;
+						csock=socket(AF_INET,SOCK_STREAM,0);
+						if(connect(csock,(struct sockaddr *)&fsin,sizeof(fsin))==-1){//fail
+							unsigned char vn_reply; 
+							unsigned char cd_reply;
+							unsigned char ip_reply[4];
+							unsigned char port_reply[2];
+							
+							vn_reply=0;
+							cd_reply=91;
+							memcpy(ip_reply,dst_ip,4);
+							memcpy(port_reply,dst_port,2);
+							
+							//vn cd port ip
+							write(clientfd,&vn_reply,1);
+							write(clientfd,&cd_reply,1);
+							write(clientfd,port_reply,2);
+							write(clientfd,ip_reply,4);
+							
+							printf("REPLY_FAIL FOR FORMAT ERROR\n");
+							fflush(stdout);
+							csock=-1;
+							
+							return 0;
+						}
+						unsigned char vn_reply; 
+						unsigned char cd_reply;
+						unsigned char ip_reply[4];
+						unsigned char port_reply[2];
+						
+						vn_reply=0;
+						cd_reply=90;
+						memcpy(ip_reply,dst_ip,4);
+						memcpy(port_reply,dst_port,2);
+						
+						//vn cd port ip
+						write(clientfd,&vn_reply,1);
+						write(clientfd,&cd_reply,1);
+						write(clientfd,port_reply,2);
+						write(clientfd,ip_reply,4);
+						
+						printf("SOCKS_CONNECT GRANTED\n");
+						fflush(stdout);
+						
+						
+					}
+				}
+			}
+			else{//not a socks packet
+				unsigned char vn_reply; 
+				unsigned char cd_reply;
+				unsigned char ip_reply[4];
+				unsigned char port_reply[2];
+				
+				vn_reply=0;
+				cd_reply=91;
+				memcpy(ip_reply,dst_ip,4);
+				memcpy(port_reply,dst_port,2);
+				
+				//vn cd port ip
+				write(clientfd,&vn_reply,1);
+				write(clientfd,&cd_reply,1);
+				write(clientfd,port_reply,2);
+				write(clientfd,ip_reply,4);
+				
+				printf("REPLY_FAIL FOR FORMAT ERROR\n");
+				fflush(stdout);
+			}
+			return 0;
 		}
 		else{
 			close(clientfd);
