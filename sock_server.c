@@ -106,7 +106,7 @@ int main(int argc,char *argv[])
 					fsin.sin_port = htons(dstport);
 					
 					
-					if(cd==1){
+					if(cd==1){//connect
 						int csock;
 						csock=socket(AF_INET,SOCK_STREAM,0);
 						if(connect(csock,(struct sockaddr *)&fsin,sizeof(fsin))==-1){//fail
@@ -151,7 +151,77 @@ int main(int argc,char *argv[])
 						printf("SOCKS_CONNECT GRANTED\n");
 						fflush(stdout);
 						
+						int nfds;
+						fd_set cfds;
+						fd_set afds;
 						
+						nfds=getdtablesize();
+						FD_ZERO(&afds);
+						FD_SET(clientfd,&afds);
+						FD_SET(csock,&afds);
+						
+						int conn = 2;
+						while(conn > 0){
+							memcpy(&cfds,&afds,sizeof(cfds));
+							
+							if(select(nfds,&cfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL) < 0){
+								printf("cd=1,select error");
+								fflush(stdout);
+								exit(0);
+							}
+							if(FD_ISSET(clientfd,&cfds)){
+								int len;
+								char browserbuf[Maxlinelen];
+								clear_array(browserbuf,Maxlinelen);
+								
+								len = read(clientfd,browserbuf,Maxlinelen);
+								if(len > 0){
+									write(csock,browserbuf,len);
+								}
+								else{
+									conn--;
+									FD_CLR(clientfd,&afds);
+								}
+							}
+							if(FD_ISSET(csock,&cfds)){
+								int len;
+								char serverbuf[Maxlinelen];
+								clear_array(serverbuf,Maxlinelen);
+								
+								len = read(csock,serverbuf,Maxlinelen);
+								if(len > 0){
+									write(clientfd,serverbuf,len);
+								}
+								else{
+									conn--;
+									FD_CLR(csock,&afds);
+								}
+							}
+						}
+						
+					}
+					else if (cd==2){
+						
+					}
+					else{//cd != 1 !=2
+						unsigned char vn_reply; 
+						unsigned char cd_reply;
+						unsigned char ip_reply[4];
+						unsigned char port_reply[2];
+						
+						vn_reply=0;
+						cd_reply=91;
+						memcpy(ip_reply,dst_ip,4);
+						memcpy(port_reply,dst_port,2);
+						
+						//vn cd port ip
+						write(clientfd,&vn_reply,1);
+						write(clientfd,&cd_reply,1);
+						write(clientfd,port_reply,2);
+						write(clientfd,ip_reply,4);
+						
+						printf("REPLY_FAIL FOR FORMAT ERROR\n");
+						fflush(stdout);
 					}
 				}
 			}
