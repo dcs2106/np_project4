@@ -24,7 +24,8 @@ int main(int argc,char *argv[])
 	int sockfd;
 	int clientfd;
 	struct sockaddr_in dest;
-	port=atoi(argv[1]);
+	//port=atoi(argv[1]);
+	port=6555;
 	clearenv();
 	chdir("/net/gcs/104/0456115/np_project4");
 	
@@ -38,10 +39,10 @@ int main(int argc,char *argv[])
 		fprintf(stderr,"socket error\n");
 		exit(1);
 	}
-	
+	int optval=1;
+	setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(optval));
 	bind(sockfd,(struct sockaddr*)&dest,sizeof(dest));
 	listen(sockfd,MaxHost);//listen*/
-	//sockfd = connectsock(argv[1],"tcp");
 	printf("SERVER_PORT: %d\n",port);
 	
 	struct sockaddr_in client_addr;
@@ -59,6 +60,7 @@ int main(int argc,char *argv[])
 		childpid=fork();
 		if(childpid==-1)printf("fork error\n");
 		else if(childpid==0){
+			int csock;
 			unsigned char buf[Maxlinelen];//vn : 1
 										  //cd : 1
 										  //dst_port : 2
@@ -77,6 +79,12 @@ int main(int argc,char *argv[])
 			dst_ip[3]=buf[7];
 			user_id=buf+8;
 			
+			unsigned char vn_reply; 
+			unsigned char cd_reply;
+			unsigned char ip_reply[4];
+			unsigned char port_reply[2];
+			
+			
 			if(vn == 4){
 				int dstport;
 				char domain[Maxlinelen];
@@ -88,9 +96,12 @@ int main(int argc,char *argv[])
 					read(clientfd,domain,Maxlinelen);
 				}
 				else{
-					sprintf(domain,"%u.%u.%u.%u",dst_ip[0],dst_ip[1],dst_ip[2],dst_ip[3]);			}
-				
+					sprintf(domain,"%u.%u.%u.%u",dst_ip[0],dst_ip[1],dst_ip[2],dst_ip[3]);			
+				}
+				printf("--------------------------------------------------------------------------------\n");
 				printf("VN: %u, CD: %u, DST IP: %s, DST PORT: %d,USERID: %s\n",vn,cd,domain,dstport,user_id);
+				printf("Permit Src = %s(%d), DST = %s(%d)\n",inet_ntoa(client_addr.sin_addr),client_addr.sin_port,domain,dstport);
+				printf("--------------------------------------------------------------------------------\n");
 				fflush(stdout);
 				
 				struct hostent *he;
@@ -107,13 +118,12 @@ int main(int argc,char *argv[])
 					
 					
 					if(cd==1){//connect
-						int csock;
 						csock=socket(AF_INET,SOCK_STREAM,0);
 						if(connect(csock,(struct sockaddr *)&fsin,sizeof(fsin))==-1){//fail
-							unsigned char vn_reply; 
-							unsigned char cd_reply;
-							unsigned char ip_reply[4];
-							unsigned char port_reply[2];
+							//unsigned char vn_reply; 
+							//unsigned char cd_reply;
+							//unsigned char ip_reply[4];
+							//unsigned char port_reply[2];
 							
 							vn_reply=0;
 							cd_reply=91;
@@ -132,10 +142,10 @@ int main(int argc,char *argv[])
 							
 							return 0;
 						}
-						unsigned char vn_reply; 
-						unsigned char cd_reply;
-						unsigned char ip_reply[4];
-						unsigned char port_reply[2];
+						//unsigned char vn_reply; 
+						//unsigned char cd_reply;
+						//unsigned char ip_reply[4];
+						//unsigned char port_reply[2];
 						
 						vn_reply=0;
 						cd_reply=90;
@@ -201,13 +211,115 @@ int main(int argc,char *argv[])
 						
 					}
 					else if (cd==2){
+						int bindfd;
+						struct sockaddr_in bind_addr;
 						
+						bindfd=socket(AF_INET,SOCK_STREAM,0);
+						if(bindfd < 0){
+							printf("bindfd error\n");
+							exit(3);
+						}
+						
+						bind_addr.sin_family = AF_INET;
+						bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+						bind_addr.sin_port = htons(INADDR_ANY);
+						
+						bind(bindfd,(struct sockaddr *)&bind_addr,sizeof(bind_addr));
+						
+						struct sockaddr_in sa;
+						socklen_t bind_addrlen = sizeof(sa);
+						getsockname(bindfd,(struct sockaddr *)&sa,&bind_addrlen);
+						
+						listen(bindfd,5);
+						
+						//unsigned char vn_reply; 
+						//unsigned char cd_reply;
+						//unsigned char ip_reply[4];
+						//unsigned char port_reply[2];
+						
+						vn_reply=0;
+						cd_reply=91;
+						port_reply[0]=ntohs(bind_addr.sin_port)/256;
+						port_reply[1]=ntohs(bind_addr.sin_port)%256;
+						ip_reply[0]=0;
+						ip_reply[1]=0;
+						ip_reply[2]=0;
+						ip_reply[3]=0;
+						write(clientfd,&vn_reply,1);
+						write(clientfd,&cd_reply,1);
+						write(clientfd,port_reply,2);
+						write(clientfd,ip_reply,4);
+						
+						int ftp_fd;
+						struct sockaddr_in ftp_addr;
+						socklen_t ftp_addrlen=sizeof(ftp_addr);
+						ftp_fd=accept(bindfd,(struct sockaddr *)&ftp_addr,&ftp_addrlen);
+						if(ftp_fd<0){
+							printf("ftp accept error\n");
+							fflush(stdout);
+						}
+						
+						write(clientfd,&vn_reply,1);
+						write(clientfd,&cd_reply,1);
+						write(clientfd,port_reply,2);
+						write(clientfd,ip_reply,4);
+						
+						printf("SOCKS_BIND GRANTED\n");
+						fflush(stdout);
+						
+						int nfds;
+						nfds=getdtablesize();
+						fd_set cfds;
+						fd_set afds;
+						
+						FD_ZERO(&afds);
+						FD_SET(ftp_fd,&afds);
+						FD_SET(clientfd,&afds);
+						
+						int conn=1;
+						while(conn > 0){
+							memcpy(&cfds,&afds,sizeof(cfds));
+							
+							if(select(nfds,&cfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL) < 0){
+								printf("cd=2,select error");
+								fflush(stdout);
+								exit(0);
+							}
+							if(FD_ISSET(clientfd,&cfds)){
+								int len;
+								char browserbuf[Maxlinelen];
+								clear_array(browserbuf,Maxlinelen);
+								
+								len = read(clientfd,browserbuf,Maxlinelen);
+								if(len > 0){
+									write(ftp_fd,browserbuf,len);
+								}
+								else{
+									conn--;
+									FD_CLR(clientfd,&afds);
+								}
+							}
+							if(FD_ISSET(ftp_fd,&cfds)){
+								int len;
+								char serverbuf[Maxlinelen];
+								clear_array(serverbuf,Maxlinelen);
+								
+								len = read(ftp_fd,serverbuf,Maxlinelen);
+								if(len > 0){
+									write(clientfd,serverbuf,len);
+								}
+								else{
+									conn--;
+									FD_CLR(csock,&afds);
+								}
+							}
+						}
 					}
 					else{//cd != 1 !=2
-						unsigned char vn_reply; 
-						unsigned char cd_reply;
-						unsigned char ip_reply[4];
-						unsigned char port_reply[2];
+						//unsigned char vn_reply; 
+						//unsigned char cd_reply;
+						//unsigned char ip_reply[4];
+						//unsigned char port_reply[2];
 						
 						vn_reply=0;
 						cd_reply=91;
@@ -226,10 +338,10 @@ int main(int argc,char *argv[])
 				}
 			}
 			else{//not a socks packet
-				unsigned char vn_reply; 
-				unsigned char cd_reply;
-				unsigned char ip_reply[4];
-				unsigned char port_reply[2];
+				//unsigned char vn_reply; 
+				//unsigned char cd_reply;
+				//unsigned char ip_reply[4];
+				//unsigned char port_reply[2];
 				
 				vn_reply=0;
 				cd_reply=91;
