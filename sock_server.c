@@ -17,7 +17,6 @@
 
 int readline(int fd, char * ptr, int maxlen);
 void clear_array(char array[],int len);
-
 int main(int argc,char *argv[])
 {
 	int port;
@@ -116,6 +115,45 @@ int main(int argc,char *argv[])
 					fsin.sin_addr = *((struct in_addr *)he->h_addr);
 					fsin.sin_port = htons(dstport);
 					
+					char destip[Maxlinelen];
+					inet_ntop(AF_INET, (void *)(&fsin.sin_addr.s_addr), destip, sizeof(destip));
+					
+					int filefd;
+					char data[Maxlinelen];
+					char IP[Maxlinelen];
+					char ip[4];
+					char *str;
+					
+					int access=0;
+					
+					filefd=open("socks.conf",O_RDONLY);
+					readline(filefd,data,Maxlinelen);//permit 140.113.*.*
+					
+					str=strtok(data," ");//permit
+					str=strtok(NULL," ");//140.113.*.*
+					strcpy(IP,str);
+					
+					if(strncmp(IP,destip,8)==0){
+						access=1;
+						printf("Permit Src = %s(%d), DST = %s(%d)\n",inet_ntoa(client_addr.sin_addr),client_addr.sin_port,domain,dstport);
+					}
+					else{
+						vn_reply=0;
+						cd_reply=91;
+						memcpy(ip_reply,dst_ip,4);
+						memcpy(port_reply,dst_port,2);
+						
+						//vn cd port ip
+						write(clientfd,&vn_reply,1);
+						write(clientfd,&cd_reply,1);
+						write(clientfd,port_reply,2);
+						write(clientfd,ip_reply,4);
+						
+						printf("Deny access\n");
+						fflush(stdout);
+						
+						return 0;
+					}
 					
 					if(cd==1){//connect
 						csock=socket(AF_INET,SOCK_STREAM,0);
@@ -211,26 +249,30 @@ int main(int argc,char *argv[])
 						
 					}
 					else if (cd==2){
-						int bindfd;
+						int psock;
 						struct sockaddr_in bind_addr;
+						int BIND_PORT;
+						BIND_PORT=port+1;
 						
-						bindfd=socket(AF_INET,SOCK_STREAM,0);
-						if(bindfd < 0){
-							printf("bindfd error\n");
+						bzero((char *)&bind_addr,sizeof(bind_addr));
+						bind_addr.sin_family = AF_INET;
+						bind_addr.sin_addr.s_addr = htons(INADDR_ANY);
+						bind_addr.sin_port = htons(INADDR_ANY);
+						
+						psock=socket(AF_INET,SOCK_STREAM,0);
+						if(psock < 0){
+							printf("psock error\n");
 							exit(3);
 						}
 						
-						bind_addr.sin_family = AF_INET;
-						bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-						bind_addr.sin_port = htons(INADDR_ANY);
-						
-						bind(bindfd,(struct sockaddr *)&bind_addr,sizeof(bind_addr));
+						bind(psock,(struct sockaddr*)&bind_addr,sizeof(bind_addr));
 						
 						struct sockaddr_in sa;
-						socklen_t bind_addrlen = sizeof(sa);
-						getsockname(bindfd,(struct sockaddr *)&sa,&bind_addrlen);
+						int sa_len;
+						getsockname(psock,(struct sockaddr *)&sa,&sa_len);
 						
-						listen(bindfd,5);
+						listen(psock,MaxHost);
+						
 						
 						//unsigned char vn_reply; 
 						//unsigned char cd_reply;
@@ -238,9 +280,9 @@ int main(int argc,char *argv[])
 						//unsigned char port_reply[2];
 						
 						vn_reply=0;
-						cd_reply=91;
-						port_reply[0]=ntohs(bind_addr.sin_port)/256;
-						port_reply[1]=ntohs(bind_addr.sin_port)%256;
+						cd_reply=90;
+						port_reply[0]=(unsigned char)(ntohs(sa.sin_port)/256);
+						port_reply[1]=(unsigned char)(ntohs(sa.sin_port)%256);
 						ip_reply[0]=0;
 						ip_reply[1]=0;
 						ip_reply[2]=0;
@@ -253,12 +295,13 @@ int main(int argc,char *argv[])
 						int ftp_fd;
 						struct sockaddr_in ftp_addr;
 						socklen_t ftp_addrlen=sizeof(ftp_addr);
-						ftp_fd=accept(bindfd,(struct sockaddr *)&ftp_addr,&ftp_addrlen);
+						ftp_fd=accept(psock,(struct sockaddr *)&ftp_addr,&ftp_addrlen);
 						if(ftp_fd<0){
 							printf("ftp accept error\n");
 							fflush(stdout);
 						}
 						
+						//reply again
 						write(clientfd,&vn_reply,1);
 						write(clientfd,&cd_reply,1);
 						write(clientfd,port_reply,2);
@@ -277,7 +320,7 @@ int main(int argc,char *argv[])
 						FD_SET(clientfd,&afds);
 						
 						int conn=1;
-						while(conn > 0){
+						while(conn>0){
 							memcpy(&cfds,&afds,sizeof(cfds));
 							
 							if(select(nfds,&cfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL) < 0){
@@ -356,6 +399,7 @@ int main(int argc,char *argv[])
 				
 				printf("REPLY_FAIL FOR FORMAT ERROR\n");
 				fflush(stdout);
+				close(clientfd);
 			}
 			return 0;
 		}
