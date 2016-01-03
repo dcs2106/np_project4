@@ -13,7 +13,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #define  MaxHost 5
-#define Maxlinelen 10240
+#define Maxlinelen 1024
 
 int readline(int fd, char * ptr, int maxlen);
 void clear_array(char array[],int len);
@@ -49,6 +49,7 @@ int main(int argc,char *argv[])
 	socklen_t addrlen = sizeof(client_addr);
 	for(;;){
 		clientfd = accept(sockfd,(struct sockaddr *)&client_addr, &addrlen);
+		
 		
 		char request_ip[Maxlinelen];
 		int request_port;
@@ -322,9 +323,10 @@ int main(int argc,char *argv[])
 						FD_ZERO(&afds);
 						FD_SET(ftp_fd,&afds);
 						FD_SET(clientfd,&afds);
-						
+					
 						int conn=1;
 						while(conn>0){
+							FD_ZERO(&cfds);
 							memcpy(&cfds,&afds,sizeof(cfds));
 							
 							if(select(nfds,&cfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL) < 0){
@@ -443,8 +445,7 @@ void clear_array(char array[],int len)
 }
 void printcontent(char array[])
 {
-	char temp[10];
-	strncpy(temp,array,9);
-	strcat(temp,"\0");
-	printf("Content : %s",temp);
+	char temp[20];
+	strncpy(temp,array,20);
+	printf("Content : %s\n",temp);
 }

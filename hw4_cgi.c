@@ -41,14 +41,6 @@ int main(int argc, char* argv[], char *envp[])
 	}
 	
 	char *queryString=getenv("QUERY_STRING");
-	setenv("REQUEST_METHOD","GET",1);
-	setenv("SCRIPT_NAME","/net/gcs/104/0456115/public_html/hello.cgi",1);
-	setenv("REMOTE_HOST","nplinux0.cs.nctu.edu.tw",1);
-	setenv("REMOTE_ADDR","140.113.216.139",1);
-	setenv("CONTENT_LENGTH","4096",1);
-	setenv("AUTH_TYPE","http",1);
-	setenv("REMOTE_USER","Jian_De",1);
-	setenv("REMOTE_IDENT","Jian_De",1);
 	
 	
 	char *temp;
@@ -112,7 +104,6 @@ int main(int argc, char* argv[], char *envp[])
 			
 			if(file_fd[i]!=-1){
 				struct hostent *host;
-				host = gethostbyname(ip[i]);
 				
 				if(strcmp(sock_ip[i],"")!=0){
 					host = gethostbyname(sock_ip[i]);
@@ -149,27 +140,31 @@ int main(int argc, char* argv[], char *envp[])
 					struct hostent *host_sock_server;
 					struct sockaddr_in sock_server;
 					int temp_port;
-					char str[MaxCommandLen];
-					host_sock_server = gethostbyname(sock_ip[i]);
+					char ipstr[MaxCommandLen];
+					host_sock_server = gethostbyname(ip[i]);
 					
 					bzero(&sock_server,sizeof(sock_server));
 					sock_server.sin_family = AF_INET;
 					sock_server.sin_addr= *((struct in_addr *)host_sock_server->h_addr);
-					sock_server.sin_port=htons(atoi(sock_port[i]));
+					sock_server.sin_port=htons(atoi(port[i]));
 					
-					temp_port=atoi(sock_port[i]);
-					inet_ntop(AF_INET, (void *)(&sock_server.sin_addr.s_addr), str, sizeof(str));
+					temp_port=atoi(port[i]);
+					inet_ntop(AF_INET, (void *)(&sock_server.sin_addr.s_addr), ipstr, sizeof(ipstr));
 					
-					unsigned char end=0;
-                    unsigned char vn=4;
-                    unsigned char cd=1;
+					unsigned char end;
+                    unsigned char vn;
+                    unsigned char cd;
                     unsigned char msg_port[2];
                     unsigned char msg_ip[4];
 					
+					end=0;
+                    vn=4;
+                    cd=1;
 					msg_port[0]= (unsigned char)(temp_port/256);
 					msg_port[1]= (unsigned char)(temp_port%256);
 					
-					sscanf(str,"%u.%u.%u.%u",&msg_ip[0],&msg_ip[1],&msg_ip[2],&msg_ip[3]);
+					sscanf(ipstr,"%u.%u.%u.%u",&msg_ip[0],&msg_ip[1],&msg_ip[2],&msg_ip[3]);
+					
 					
 					write(csock[i],&vn,1);
 					write(csock[i],&cd,1);
@@ -260,8 +255,8 @@ int main(int argc, char* argv[], char *envp[])
 				if(strcmp(sock_ip[i],"")!=0){
 					read(csock[i],&vn_reply[i],1);
 					read(csock[i],&cd_reply[i],1);
-					read(csock[i],&port_reply[i],2);
-					read(csock[i],&ip_reply[i],4);
+					read(csock[i],port_reply[i],2);
+					read(csock[i],ip_reply[i],4);
 					
 					if(cd_reply[i] == 90){//granted
 						status[i]=F_READING;
@@ -272,6 +267,7 @@ int main(int argc, char* argv[], char *envp[])
 						FD_CLR(csock[i],&rs);
 						FD_CLR(csock[i],&ws);
 						conn--;
+						
 						close(csock[i]);
 						csock[i]=-1;
 						continue;
@@ -312,8 +308,8 @@ int main(int argc, char* argv[], char *envp[])
 			else if(status[i]==F_READING && FD_ISSET(csock[i],&rfds)){
 				char ResultFromServer[MaxCommandLen];
 				clean_array(ResultFromServer,MaxCommandLen);
-				
-				if(linelen(csock[i],ResultFromServer,MaxCommandLen) > 0 || ( linelen(csock[i],ResultFromServer,MaxCommandLen)==-1 &&errno==EWOULDBLOCK )){
+				int len=linelen(csock[i],ResultFromServer,MaxCommandLen);
+				if(len > 0 || (len==-1 &&errno==EWOULDBLOCK )){
 					
 					strtok(ResultFromServer,"\r\n");
 					
