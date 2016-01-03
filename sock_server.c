@@ -13,10 +13,11 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #define  MaxHost 5
-#define Maxlinelen 1024
+#define Maxlinelen 10240
 
 int readline(int fd, char * ptr, int maxlen);
 void clear_array(char array[],int len);
+void printcontent(char array[]);
 int main(int argc,char *argv[])
 {
 	int port;
@@ -115,7 +116,7 @@ int main(int argc,char *argv[])
 					fsin.sin_addr = *((struct in_addr *)he->h_addr);
 					fsin.sin_port = htons(dstport);
 					
-					char destip[Maxlinelen];
+					/*char destip[Maxlinelen];
 					inet_ntop(AF_INET, (void *)(&fsin.sin_addr.s_addr), destip, sizeof(destip));
 					
 					int filefd;
@@ -127,9 +128,10 @@ int main(int argc,char *argv[])
 					int access=0;
 					
 					filefd=open("socks.conf",O_RDONLY);
-					readline(filefd,data,Maxlinelen);//permit 140.113.*.*
+					readline(filefd,data,Maxlinelen);//permit c 140.113.*.*
 					
 					str=strtok(data," ");//permit
+					str=strtok(NULL," ");//c
 					str=strtok(NULL," ");//140.113.*.*
 					strcpy(IP,str);
 					
@@ -153,7 +155,7 @@ int main(int argc,char *argv[])
 						fflush(stdout);
 						
 						return 0;
-					}
+					}*/
 					
 					if(cd==1){//connect
 						csock=socket(AF_INET,SOCK_STREAM,0);
@@ -223,6 +225,7 @@ int main(int argc,char *argv[])
 								clear_array(browserbuf,Maxlinelen);
 								
 								len = read(clientfd,browserbuf,Maxlinelen);
+								printcontent(browserbuf);
 								if(len > 0){
 									write(csock,browserbuf,len);
 								}
@@ -237,6 +240,7 @@ int main(int argc,char *argv[])
 								clear_array(serverbuf,Maxlinelen);
 								
 								len = read(csock,serverbuf,Maxlinelen);
+								printcontent(serverbuf);
 								if(len > 0){
 									write(clientfd,serverbuf,len);
 								}
@@ -334,6 +338,7 @@ int main(int argc,char *argv[])
 								clear_array(browserbuf,Maxlinelen);
 								
 								len = read(clientfd,browserbuf,Maxlinelen);
+								printcontent(browserbuf);
 								if(len > 0){
 									write(ftp_fd,browserbuf,len);
 								}
@@ -348,12 +353,13 @@ int main(int argc,char *argv[])
 								clear_array(serverbuf,Maxlinelen);
 								
 								len = read(ftp_fd,serverbuf,Maxlinelen);
+								printcontent(serverbuf);
 								if(len > 0){
 									write(clientfd,serverbuf,len);
 								}
 								else{
 									conn--;
-									FD_CLR(csock,&afds);
+									FD_CLR(ftp_fd,&afds);
 								}
 							}
 						}
@@ -434,4 +440,11 @@ void clear_array(char array[],int len)
 	for(int i=0;i<len;i++){
 		array[i]='\0';
 	}
+}
+void printcontent(char array[])
+{
+	char temp[10];
+	strncpy(temp,array,9);
+	strcat(temp,"\0");
+	printf("Content : %s",temp);
 }
